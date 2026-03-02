@@ -15,7 +15,7 @@
 [mention your project hosted link here]
 
 ### Project Description
-[2-3 lines about what your project does]
+An AI-driven Smart City & Safety Hub that integrates real-time IoT tracking for household essentials with a live mapping system for urban utilities. It features hands-free SOS voice triggers and automated safety checklists to bridge the gap between personal security and public infrastructure management.
 
 ### The Problem statement
 [What problem are you solving?]
