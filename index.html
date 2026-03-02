@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALL IS WELL! | Unified India Hub</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        
+        body { background-color: #020617; color: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; overflow: hidden; }
+        #home-view { height: 100vh; width: 100vw; background: radial-gradient(circle at 0% 0%, #1e1b4b 0%, #020617 50%), radial-gradient(circle at 100% 100%, #1e293b 0%, #020617 50%); display: flex; flex-direction: column; overflow-y: auto; }
+        .glass-card { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; transition: all 0.3s ease; }
+        .glass-card:hover { border: 1px solid rgba(59, 130, 246, 0.5); background: rgba(30, 41, 59, 0.6); }
+        #leaving-view { height: 100vh; width: 100vw; display: none; flex-direction: row; }
+        #map { height: 100%; width: 100%; z-index: 1; }
+        input { background: transparent; outline: none; border-bottom: 1px solid transparent; transition: 0.3s; }
+        input:focus { border-bottom: 1px solid #3b82f6; }
+        .active-tab { background: #3b82f6 !important; color: white !important; }
+        .notification { position: fixed; left: 50%; transform: translateX(-50%); z-index: 9999; transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); top: -150px; }
+        .notification.show { top: 30px; }
+
+        #safety-modal { display: none; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.98); backdrop-filter: blur(20px); z-index: 5000; align-items: center; justify-content: center; }
+        .checklist-item { display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.03); padding: 14px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px; transition: 0.2s; }
+        .type-btn { flex: 1; padding: 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); font-size: 10px; font-weight: 800; transition: 0.3s; color: #64748b; }
+        .type-btn.active { border-color: #3b82f6; background: rgba(59, 130, 246, 0.1); color: white; }
+
+        @keyframes pulse-cyan {
+            0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(6, 182, 212, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+        }
+        .voice-active-pulse { animation: pulse-cyan 2s infinite; }
+    </style>
+</head>
+<body>
+
+    <div id="safety-modal">
+        <div class="glass-card p-10 w-full max-w-md mx-4 space-y-6 border-blue-500/30 shadow-2xl">
+            <div class="text-center">
+                <h3 class="text-xl font-black text-white italic">WHERE ARE YOU GOING?</h3>
+                <p class="text-slate-500 text-[9px] uppercase tracking-widest mt-1">Checklist will adapt to your trip</p>
+            </div>
+            <div class="flex gap-2 bg-slate-900/50 p-1.5 rounded-2xl">
+                <button onclick="setTripType('work')" id="btn-work" class="type-btn active">OFFICE</button>
+                <button onclick="setTripType('walk')" id="btn-walk" class="type-btn">WALK</button>
+                <button onclick="setTripType('trip')" id="btn-trip" class="type-btn">TRAVEL</button>
+            </div>
+            <div id="modal-checklist-content" class="min-h-[200px] space-y-1"></div>
+            <div class="flex gap-3 pt-4 border-t border-slate-800">
+                <button onclick="document.getElementById('safety-modal').style.display='none'" class="flex-1 bg-slate-800 text-slate-500 py-4 rounded-2xl font-bold text-xs">CANCEL</button>
+                <button onclick="confirmAndGo()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black text-white text-xs">CONFIRM & EXIT</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification-toast" class="notification glass-card px-6 py-4 flex items-center gap-4 border-emerald-500/50 shadow-2xl shadow-emerald-500/20">
+        <div class="bg-emerald-500 p-2 rounded-full"><i data-lucide="send" class="text-white" size="18"></i></div>
+        <div>
+            <h4 class="text-sm font-bold text-white">Alert Dispatched</h4>
+            <p id="alert-subtext" class="text-[10px] text-slate-400 uppercase tracking-widest">Authority notified of critical status</p>
+        </div>
+    </div>
+
+    <div id="wifi-reminder" class="notification glass-card px-6 py-4 flex items-center gap-4 border-blue-500/50 shadow-2xl shadow-blue-500/20">
+        <div class="bg-blue-500 p-2 rounded-full"><i data-lucide="wifi-off" class="text-white" size="18"></i></div>
+        <div><h4 class="text-sm font-bold text-white">പോവാനോ?</h4><p class="text-[10px] text-slate-400 uppercase tracking-widest">വീട് പൂട്ടാൻ മറക്കല്ലേ മോനെ!</p></div>
+    </div>
+
+    <div id="home-view" class="p-8 md:p-16">
+        <div class="max-w-6xl mx-auto w-full">
+            <div class="flex justify-between items-center mb-16">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-600 p-2.5 rounded-2xl shadow-lg shadow-blue-500/20"><i data-lucide="shield-check" class="text-white" size="24"></i></div>
+                    <div><h1 class="text-2xl font-extrabold tracking-tight">ALL IS WELL!</h1><p class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Private Residence Hub</p></div>
+                </div>
+                <div class="flex gap-4">
+                    <button onclick="simulateWifiDisconnect()" class="bg-slate-800 text-slate-400 px-4 py-3 rounded-2xl text-xs font-bold hover:bg-slate-700 transition-all">Simulate WiFi Loss</button>
+                    <button onclick="transitionToLeaving()" class="group bg-white text-black px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-500 hover:text-white transition-all">Leaving Home <i data-lucide="arrow-right-circle" size="18" class="group-hover:translate-x-1 transition-transform"></i></button>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+                <div class="space-y-6">
+                    <h2 class="text-sm font-black text-slate-500 uppercase tracking-[0.3em]">Quick Safety Check</h2>
+                    <div class="grid grid-cols-1 gap-4">
+                        <div class="glass-card p-6 flex justify-between items-center">
+                            <div class="flex items-center gap-4">
+                                <div class="bg-emerald-500/10 p-3 rounded-xl text-emerald-400"><i data-lucide="lock" size="24"></i></div>
+                                <div><p class="font-bold text-lg">Main Entrance</p><p class="text-xs text-slate-500 check-time">Verified 5m ago</p></div>
+                            </div>
+                            <button onclick="updateCheck(this)" class="px-5 py-2 bg-white/5 hover:bg-blue-600 rounded-xl text-xs font-bold transition-all">Verify</button>
+                        </div>
+                        <div class="glass-card p-6 flex justify-between items-center">
+                            <div class="flex items-center gap-4">
+                                <div class="bg-orange-500/10 p-3 rounded-xl text-orange-400"><i data-lucide="flame" size="24"></i></div>
+                                <div><p class="font-bold text-lg">Gas & Appliances</p><p class="text-xs text-slate-500 check-time">Verified 12m ago</p></div>
+                            </div>
+                            <button onclick="updateCheck(this)" class="px-5 py-2 bg-white/5 hover:bg-blue-600 rounded-xl text-xs font-bold transition-all">Verify</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-6"><h2 class="text-sm font-black text-slate-500 uppercase tracking-[0.3em]">Item Tracker</h2><div id="item-container" class="space-y-4"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="leaving-view">
+        <aside class="w-full md:w-[420px] bg-[#020617] border-r border-slate-800 flex flex-col z-[1001]">
+            <div class="p-8 border-b border-slate-800 flex justify-between items-center">
+                <h2 class="font-black text-xl italic uppercase text-blue-500">Public Control</h2>
+                <button onclick="transitionToHome()" class="text-xs font-bold bg-white/5 px-3 py-1 rounded-full text-slate-400">Back Home</button>
+            </div>
+            <div class="p-8 space-y-6 flex-1 overflow-y-auto">
+                
+                <div class="glass-card p-6 border-cyan-500/30">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex items-center gap-3">
+                            <div id="voice-icon-bg" class="bg-cyan-500/20 p-2 rounded-lg text-cyan-400 transition-all">
+                                <i data-lucide="mic" size="18"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xs font-black text-white uppercase tracking-tighter">Voice Guard</h3>
+                                <p id="voice-status" class="text-[9px] text-slate-500 uppercase">Listening Off</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="voiceToggle" class="sr-only peer" onchange="toggleVoiceGuard()">
+                            <div class="w-10 h-5 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-600 peer-checked:after:bg-white"></div>
+                        </label>
+                    </div>
+                    <p class="text-[8px] text-slate-600 leading-tight uppercase font-bold">Trigger: "Sahaayikkane", "Ayo", or "Help"</p>
+                </div>
+
+                <div class="glass-card p-6 border-purple-500/30">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-purple-500/20 p-2 rounded-lg text-purple-400"><i data-lucide="shield" size="18"></i></div>
+                            <div>
+                                <h3 class="text-xs font-black text-white uppercase tracking-tighter">Shadow Escort</h3>
+                                <p id="shadow-status" class="text-[9px] text-slate-500 uppercase">Standby</p>
+                                <p class="text-[8px] text-slate-600 leading-tight uppercase font-bold">Trigger by No motion and fall</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="shadowToggle" class="sr-only peer" onchange="toggleShadowEscort()">
+                            <div class="w-10 h-5 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
+                        </label>
+                    </div>
+                    <button onclick="simulateFall()" id="test-fall-btn" class="hidden w-full py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold text-slate-400 hover:bg-purple-600/20 transition-all uppercase">Simulate Fall or No Motion (Test)</button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-2xl">
+                    <button onclick="switchCategory('Dustbin')" id="tab-Dustbin" class="py-2 text-[10px] font-black rounded-xl active-tab tracking-widest uppercase transition-all">Dustbins</button>
+                    <button onclick="switchCategory('Toilet')" id="tab-Toilet" class="py-2 text-[10px] font-black rounded-xl text-slate-500 tracking-widest uppercase transition-all">Toilets</button>
+                    <button onclick="switchCategory('Police')" id="tab-Police" class="py-2 text-[10px] font-black rounded-xl text-slate-500 tracking-widest uppercase transition-all">Police</button>
+                    <button onclick="switchCategory('Pharmacy')" id="tab-Pharmacy" class="py-2 text-[10px] font-black rounded-xl text-slate-500 tracking-widest uppercase transition-all">Pharmacy</button>
+                </div>
+
+                <div class="glass-card p-6 space-y-6">
+                    <select id="assetSelector" onchange="focusOnSelected()" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl text-sm text-white outline-none"></select>
+                    
+                    <div id="level-control-ui">
+                        <input type="range" id="levelRange" min="0" max="100" value="0" oninput="document.getElementById('rangeDisplay').innerText = this.value + '%'" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                        <div class="flex justify-between items-center mt-2"><span class="text-[10px] font-bold text-slate-600 uppercase">Clear</span><span id="rangeDisplay" class="text-2xl font-black text-blue-400">0%</span><span class="text-[10px] font-bold text-slate-600 uppercase">Full</span></div>
+                    </div>
+
+                    <button id="main-action-btn" onclick="handleMainAction()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all"><i data-lucide="zap" size="18"></i> PUSH LIVE UPDATE</button>
+                </div>
+            </div>
+        </aside>
+        <main class="flex-1"><div id="map"></div></main>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const cityAssets = {
+            'Dustbin': [
+               { name: "Andhra Pradesh: Amaravati Circle", lat: 16.5062, lng: 80.6480, level: 20 },
+                { name: "Andhra Pradesh: Vizag Beach", lat: 17.7127, lng: 83.3039, level: 65 },
+                { name: "Arunachal Pradesh: Itanagar Market", lat: 27.0844, lng: 93.6053, level: 10 },
+                { name: "Arunachal Pradesh: Naharlagun Stn", lat: 27.1086, lng: 93.6923, level: 45 },
+                { name: "Assam: Guwahati Bazaar", lat: 26.1764, lng: 91.7512, level: 30 },
+                { name: "Assam: Dibrugarh Chowk", lat: 27.4728, lng: 94.9120, level: 80 },
+                { name: "Bihar: Patna Junction", lat: 25.6040, lng: 85.1314, level: 90 },
+                { name: "Bihar: Gaya Bodhgaya Rd", lat: 24.7955, lng: 84.9994, level: 15 },
+                { name: "Chhattisgarh: Raipur MG Rd", lat: 21.2514, lng: 81.6296, level: 55 },
+                { name: "Chhattisgarh: Bilaspur Link", lat: 22.0778, lng: 82.1401, level: 12 },
+                { name: "Delhi: Connaught Place", lat: 28.6330, lng: 77.2190, level: 85 },
+                { name: "Delhi: Hauz Khas", lat: 28.5490, lng: 77.1900, level: 40 },
+                { name: "Goa: Panjim Promenade", lat: 15.4909, lng: 73.8278, level: 22 },
+                { name: "Goa: Margao Market", lat: 15.2736, lng: 73.9582, level: 75 },
+                { name: "Gujarat: Ahmedabad River", lat: 23.0225, lng: 72.5714, level: 40 },
+                { name: "Gujarat: Surat Textile Hub", lat: 21.1702, lng: 72.8311, level: 50 },
+                { name: "Haryana: Gurgaon Cyber Hub", lat: 28.4595, lng: 77.0266, level: 60 },
+                { name: "Haryana: Panipat GT Rd", lat: 29.3909, lng: 76.9635, level: 25 },
+                { name: "Himachal Pradesh: Shimla Mall Rd", lat: 31.1048, lng: 77.1734, level: 15 },
+                { name: "Himachal Pradesh: Manali Market", lat: 32.2432, lng: 77.1892, level: 55 },
+                { name: "Jammu and Kashmir: Srinagar Dal Lake", lat: 34.0837, lng: 74.7973, level: 30 },
+                { name: "Jammu and Kashmir: Jammu Raghunath", lat: 32.7266, lng: 74.8570, level: 70 },
+                { name: "Jharkhand: Ranchi Main Rd", lat: 23.3441, lng: 85.3096, level: 45 },
+                { name: "Jharkhand: Jamshedpur", lat: 22.8046, lng: 86.2029, level: 10 },
+                { name: "Karnataka: Bengaluru MG Road", lat: 12.9750, lng: 77.6100, level: 30 },
+                { name: "Karnataka: Mysuru Palace", lat: 12.3050, lng: 76.6550, level: 15 },
+                { name: "Kerala: Kochi Marine Drive", lat: 9.9800, lng: 76.2700, level: 55 },
+                { name: "Kerala: TVM Museum Rd", lat: 8.5080, lng: 76.9530, level: 10 },
+                { name: "Madhya Pradesh: Indore", lat: 22.7196, lng: 75.8577, level: 85 },
+                { name: "Madhya Pradesh: Bhopal Lake View", lat: 23.2599, lng: 77.4126, level: 20 },
+                { name: "Maharashtra: Mumbai Marine Dr", lat: 18.9440, lng: 72.8230, level: 20 },
+                { name: "Maharashtra: Pune FC Road", lat: 18.5200, lng: 73.8400, level: 65 },
+                { name: "Manipur: Imphal Kangla", lat: 24.8170, lng: 93.9368, level: 5 },
+                { name: "Meghalaya: Shillong Police Bazaar", lat: 25.5788, lng: 91.8833, level: 12 },
+                { name: "Mizoram: Aizawl Chanmari", lat: 23.7271, lng: 92.7176, level: 18 },
+                { name: "Nagaland: Kohima Phool Bazaar", lat: 25.6747, lng: 94.1100, level: 30 },
+                { name: "Nagaland: Dimapur City Tower", lat: 25.9080, lng: 93.7270, level: 55 },
+                { name: "Odisha: Bhubaneswar Janpath", lat: 20.2961, lng: 85.8245, level: 40 },
+                { name: "Odisha: Puri Sea Beach Rd", lat: 19.7983, lng: 85.8250, level: 15 },
+                { name: "Punjab: Amritsar Golden Temple", lat: 31.6200, lng: 74.8765, level: 90 },
+                { name: "Punjab: Ludhiana Tower", lat: 30.9010, lng: 75.8573, level: 20 },
+                { name: "Rajasthan: Jaipur Pink City", lat: 26.9124, lng: 75.7873, level: 45 },
+                { name: "Rajasthan: Udaipur Lake Palace", lat: 24.5854, lng: 73.7125, level: 10 },
+                { name: "Sikkim: Gangtok MG Marg", lat: 27.3314, lng: 88.6138, level: 5 },
+                { name: "Sikkim: Namchi Central Park", lat: 27.1670, lng: 88.3580, level: 60 },
+                { name: "Tamil Nadu: Chennai Marina Rd", lat: 13.0475, lng: 80.2824, level: 75 },
+                { name: "Tamil Nadu: Madurai Temple East", lat: 9.9195, lng: 78.1193, level: 12 },
+                { name: "Telangana: Hyd Charminar", lat: 17.3616, lng: 78.4747, level: 85 },
+                { name: "Telangana: Hyd HITEC City", lat: 17.4435, lng: 78.3772, level: 25 },
+                { name: "Tripura: Agartala Post Office", lat: 23.8315, lng: 91.2808, level: 18 },
+                { name: "Uttar Pradesh: Lucknow Hazratganj", lat: 26.8467, lng: 80.9462, level: 50 },
+                { name: "Uttar Pradesh: Varanasi Ghats", lat: 25.3060, lng: 83.0090, level: 98 },
+                { name: "Uttarakhand: Dehradun Rajpur Rd", lat: 30.3165, lng: 78.0322, level: 15 },
+                { name: "Uttarakhand: Haridwar Ghat", lat: 29.9457, lng: 78.1642, level: 65 },
+                { name: "West Bengal: Park Street", lat: 22.5530, lng: 88.3530, level: 22 },
+                { name: "West Bengal: Salt Lake", lat: 22.5840, lng: 88.4200, level: 75 }
+            ],
+            'Toilet': [
+                { name: "Andhra Pradesh: Vijayawada", lat: 16.5165, lng: 80.6167, level: 10 },
+                { name: "Andhra Pradesh: Tirupati Alipiri", lat: 13.6288, lng: 79.4192, level: 92 },
+                { name: "Arunachal Pradesh: Tawang Rd", lat: 27.5861, lng: 91.8594, level: 5 },
+                { name: "Assam: Kamakhya Temple", lat: 26.1662, lng: 91.7058, level: 88 },
+                { name: "Bihar: Gandhi Maidan", lat: 25.6212, lng: 85.1437, level: 75 },
+                { name: "Chhattisgarh: Durg Public", lat: 21.1905, lng: 81.2849, level: 20 },
+                { name: "Delhi: India Gate Public", lat: 28.6120, lng: 77.2290, level: 25 },
+                { name: "Delhi: Chandni Chowk", lat: 28.6560, lng: 77.2300, level: 88 },
+                { name: "Goa: Calangute Beach", lat: 15.5494, lng: 73.7535, level: 80 },
+                { name: "Gujarat: Vadodara Garden", lat: 22.3106, lng: 73.1926, level: 30 },
+                { name: "Haryana: Rohtak Market", lat: 28.8955, lng: 76.6066, level: 65 },
+                { name: "Himachal Pradesh: Dharamshala", lat: 32.2190, lng: 76.3234, level: 25 },
+                { name: "Jammu and Kashmir: Gulmarg Gondola", lat: 34.0484, lng: 74.3805, level: 10 },
+                { name: "Jharkhand: Dhanbad Stn Area", lat: 23.7918, lng: 86.4305, level: 85 },
+                { name: "Karnataka: Cubbon Park", lat: 12.9770, lng: 77.5950, level: 45 },
+                { name: "Karnataka: Indiranagar", lat: 12.9780, lng: 77.6380, level: 70 },
+                { name: "Kerala: Fort Kochi Public", lat: 9.9650, lng: 76.2420, level: 35 },
+                { name: "Kerala: East Fort TVM", lat: 8.4830, lng: 76.9450, level: 60 },
+                { name: "Madhya Pradesh: Gwalior Fort", lat: 26.2298, lng: 78.1712, level: 40 },
+                { name: "Maharashtra: Gateway Plaza", lat: 18.9220, lng: 72.8340, level: 10 },
+                { name: "Maharashtra: Swargate Pune", lat: 18.5010, lng: 73.8600, level: 92 },
+                { name: "Manipur: Churachandpur", lat: 24.3333, lng: 93.6667, level: 35 },
+                { name: "Meghalaya: Jowai Market", lat: 25.4437, lng: 92.2132, level: 15 },
+                { name: "Mizoram: Champhai Border", lat: 23.4560, lng: 93.3284, level: 25 },
+                { name: "Nagaland: Kohima Terminal", lat: 25.6660, lng: 94.1030, level: 10 },
+                { name: "Nagaland: Dimapur Stn", lat: 25.9120, lng: 93.7230, level: 85 },
+                { name: "Odisha: Cuttack Netaji Circle", lat: 20.4625, lng: 85.8830, level: 22 },
+                { name: "Odisha: Rourkela Market", lat: 22.2530, lng: 84.8490, level: 50 },
+                { name: "Punjab: Chandigarh Sec 17", lat: 30.7410, lng: 76.7820, level: 5 },
+                { name: "Punjab: Patiala Bus Stand", lat: 30.3300, lng: 76.3900, level: 70 },
+                { name: "Rajasthan: Jodhpur Blue Cafe", lat: 26.2389, lng: 73.0243, level: 30 },
+                { name: "Rajasthan: Ajmer Dargah", lat: 26.4520, lng: 74.6390, level: 95 },
+                { name: "Sikkim: Pelling Skywalk", lat: 27.2880, lng: 88.2350, level: 12 },
+                { name: "Tamil Nadu: Coimbatore RS Puram", lat: 11.0110, lng: 76.9470, level: 20 },
+                { name: "Telangana: Secunderabad Stn", lat: 17.4334, lng: 78.5017, level: 88 },
+                { name: "Tripura: Agartala Airport Exit", lat: 23.8870, lng: 91.2400, level: 5 },
+                { name: "Uttar Pradesh: Noida Sec 18", lat: 28.5700, lng: 77.3260, level: 45 },
+                { name: "Uttar Pradesh: Agra Taj West", lat: 27.1751, lng: 78.0421, level: 90 },
+                { name: "Uttarakhand: Rishikesh Ram Jhula", lat: 30.1245, lng: 78.3130, level: 35 },
+                { name: "West Bengal: Victoria Mem", lat: 22.5440, lng: 88.3420, level: 15 },
+                { name: "West Bengal: Howrah Stn", lat: 22.5830, lng: 88.3410, level: 98 }
+            ],
+            'Police': [
+                { name: "Andhra Pradesh: Vijayawada One Town", lat: 16.5165, lng: 80.6167, phone: "0866-2422200" },
+    { name: "Arunachal Pradesh: Tawang PS", lat: 27.5861, lng: 91.8594, phone: "03794-222213" },
+    { name: "Assam: Kamakhya PS", lat: 26.1662, lng: 91.7058, phone: "0361-2735222" },
+    { name: "Bihar: Gandhi Maidan PS", lat: 25.6212, lng: 85.1437, phone: "0612-2212222" },
+    { name: "Chhattisgarh: Durg City PS", lat: 21.1905, lng: 81.2849, phone: "0788-2322022" },
+    { name: "Delhi: Connaught Place PS", lat: 28.6328, lng: 77.2197, phone: "011-23351100" },
+    { name: "Delhi: Chandni Chowk PS", lat: 28.6560, lng: 77.2300, phone: "011-23964100" },
+    { name: "Goa: Calangute PS", lat: 15.5494, lng: 73.7535, phone: "0832-2278284" },
+    { name: "Gujarat: Vadodara City PS", lat: 22.3106, lng: 73.1926, phone: "0265-2415111" },
+    { name: "Haryana: Rohtak City PS", lat: 28.8955, lng: 76.6066, phone: "01262-246600" },
+    { name: "Himachal Pradesh: Dharamshala PS", lat: 32.2190, lng: 76.3234, phone: "01892-222222" },
+    { name: "Jammu and Kashmir: Gulmarg PS", lat: 34.0484, lng: 74.3805, phone: "01954-254424" },
+    { name: "Jharkhand: Dhanbad Sadar PS", lat: 23.7918, lng: 86.4305, phone: "0326-2311215" },
+    { name: "Karnataka: Cubbon Park PS", lat: 12.9770, lng: 77.5950, phone: "080-22942520" },
+    { name: "Karnataka: Indiranagar PS", lat: 12.9780, lng: 77.6380, phone: "080-22943411" },
+    { name: "Kerala: Kochi Central PS", lat: 9.9745, lng: 76.2801, phone: "0484-2353131" },
+    { name: "Kerala: East Fort PS (TVM)", lat: 8.4830, lng: 76.9450, phone: "0471-2460670" },
+    { name: "Madhya Pradesh: Gwalior Fort PS", lat: 26.2298, lng: 78.1712, phone: "0751-2445200" },
+    { name: "Maharashtra: Marine Drive PS", lat: 18.9430, lng: 72.8235, phone: "022-22812222" },
+    { name: "Maharashtra: Swargate PS (Pune)", lat: 18.5010, lng: 73.8600, phone: "020-24440001" },
+    { name: "Manipur: Churachandpur PS", lat: 24.3333, lng: 93.6667, phone: "03874-233311" },
+    { name: "Meghalaya: Jowai PS", lat: 25.4437, lng: 92.2132, phone: "03652-223333" },
+    { name: "Mizoram: Champhai PS", lat: 23.4560, lng: 93.3284, phone: "03831-234011" },
+    { name: "Nagaland: Kohima Central PS", lat: 25.6660, lng: 94.1030, phone: "0370-2222222" },
+    { name: "Odisha: Cuttack City PS", lat: 20.4625, lng: 85.8830, phone: "0671-2303222" },
+    { name: "Punjab: Chandigarh Sec 17 PS", lat: 30.7410, lng: 76.7820, phone: "0172-2773951" },
+    { name: "Rajasthan: Jodhpur City PS", lat: 26.2389, lng: 73.0243, phone: "0291-2650777" },
+    { name: "Sikkim: Pelling PS", lat: 27.2880, lng: 88.2350, phone: "03595-258211" },
+    { name: "Tamil Nadu: Coimbatore RS Puram PS", lat: 11.0110, lng: 76.9470, phone: "0422-2470100" },
+    { name: "Telangana: Secunderabad PS", lat: 17.4334, lng: 78.5017, phone: "040-27853500" },
+    { name: "Uttar Pradesh: Noida Sec 20 PS", lat: 28.5700, lng: 77.3260, phone: "0120-2521100" },
+    { name: "Uttarakhand: Rishikesh PS", lat: 30.1245, lng: 78.3130, phone: "0135-2430001" },
+    { name: "West Bengal: Howrah Bridge PS", lat: 22.5830, lng: 88.3410, phone: "033-26412121" }
+],
+            'Pharmacy': [
+                { name: "Andhra Pradesh: Apollo Pharmacy Vijayawada", lat: 16.5165, lng: 80.6167, phone: "1860-500-0101" },
+    { name: "Arunachal Pradesh: Tawang Medical Hall", lat: 27.5861, lng: 91.8594, phone: "03794-222201" },
+    { name: "Assam: Kamakhya Druggists", lat: 26.1662, lng: 91.7058, phone: "0361-2730101" },
+    { name: "Bihar: MedPlus Gandhi Maidan", lat: 25.6212, lng: 85.1437, phone: "0612-2200101" },
+    { name: "Chhattisgarh: Apollo Pharmacy Durg", lat: 21.1905, lng: 81.2849, phone: "0788-2320101" },
+    { name: "Delhi: Apollo Pharmacy Connaught Place", lat: 28.6328, lng: 77.2197, phone: "011-23320101" },
+    { name: "Delhi: Chandni Chowk Medicos", lat: 28.6560, lng: 77.2300, phone: "011-23901010" },
+    { name: "Goa: Wellness Forever Calangute", lat: 15.5494, lng: 73.7535, phone: "0832-2270101" },
+    { name: "Gujarat: Apollo Pharmacy Vadodara", lat: 22.3106, lng: 73.1926, phone: "0265-2410101" },
+    { name: "Haryana: Rohtak Medical Store", lat: 28.8955, lng: 76.6066, phone: "01262-240101" },
+    { name: "Himachal Pradesh: Dharamshala Pharma", lat: 32.2190, lng: 76.3234, phone: "01892-220101" },
+    { name: "Jammu and Kashmir: Gulmarg Chemist", lat: 34.0484, lng: 74.3805, phone: "01954-250101" },
+    { name: "Jharkhand: Dhanbad MedPlus", lat: 23.7918, lng: 86.4305, phone: "0326-2310101" },
+    { name: "Karnataka: Apollo Pharmacy Cubbon Park", lat: 12.9770, lng: 77.5950, phone: "080-22201010" },
+    { name: "Karnataka: Indiranagar MedPlus", lat: 12.9780, lng: 77.6380, phone: "080-22901011" },
+    { name: "Kerala: Apollo Pharmacy Kochi", lat: 9.9745, lng: 76.2801, phone: "0484-2350101" },
+    { name: "Kerala: Trivandrum Medical College Pharma", lat: 8.4830, lng: 76.9450, phone: "0471-2460101" },
+    { name: "Madhya Pradesh: Gwalior Apollo", lat: 26.2298, lng: 78.1712, phone: "0751-2440101" },
+    { name: "Maharashtra: Wellness Forever Marine Drive", lat: 18.9430, lng: 72.8235, phone: "022-22801010" },
+    { name: "Maharashtra: Apollo Pharmacy Swargate", lat: 18.5010, lng: 73.8600, phone: "020-24401010" },
+    { name: "Manipur: Churachandpur Druggists", lat: 24.3333, lng: 93.6667, phone: "03874-230101" },
+    { name: "Meghalaya: Jowai Pharma Store", lat: 25.4437, lng: 92.2132, phone: "03652-220101" },
+    { name: "Mizoram: Champhai Medicals", lat: 23.4560, lng: 93.3284, phone: "03831-230101" },
+    { name: "Nagaland: Kohima Apollo", lat: 25.6660, lng: 94.1030, phone: "0370-2220101" },
+    { name: "Odisha: Cuttack MedPlus", lat: 20.4625, lng: 85.8830, phone: "0671-2300101" },
+    { name: "Punjab: Chandigarh Apollo Sec 17", lat: 30.7410, lng: 76.7820, phone: "0172-2770101" },
+    { name: "Rajasthan: Jodhpur Medico", lat: 26.2389, lng: 73.0243, phone: "0291-2650101" },
+    { name: "Sikkim: Pelling Medical Hall", lat: 27.2880, lng: 88.2350, phone: "03595-250101" },
+    { name: "Tamil Nadu: Apollo Pharmacy RS Puram", lat: 11.0110, lng: 76.9470, phone: "0422-2470101" },
+    { name: "Telangana: Secunderabad Apollo", lat: 17.4334, lng: 78.5017, phone: "040-27801010" },
+    { name: "Uttar Pradesh: Apollo Pharmacy Noida", lat: 28.5700, lng: 77.3260, phone: "0120-2520101" },
+    { name: "Uttarakhand: Rishikesh Medicals", lat: 30.1245, lng: 78.3130, phone: "0135-2430101" },
+    { name: "West Bengal: Frank Ross Pharmacy Howrah", lat: 22.5830, lng: 88.3410, phone: "033-26401010" }
+]
+        };
+
+        const trackedItems = [
+            { id: 1, name: "Wallet & Keys", loc: "Door Console", icon: "key", types: ['work', 'walk', 'trip'] },
+            { id: 2, name: "Office ID Badge", loc: "Laptop Bag", icon: "user-check", types: ['work'] },
+            { id: 3, name: "Laptop Charger", loc: "Desk", icon: "zap", types: ['work', 'trip'] }
+        ];
+
+        let currentCategory = 'Dustbin';
+        let map, markerGroup, shadowActive = false, recognition, voiceActive = false;
+
+        function initMap() {
+            if (map) return;
+            map = L.map('map', { zoomControl: false }).setView([20.5937, 78.9629], 5);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+            markerGroup = L.layerGroup().addTo(map);
+            renderMapAndMenu();
+        }
+
+        function switchCategory(cat) {
+            currentCategory = cat;
+            
+            // Tab highlight
+            document.querySelectorAll('#tab-Dustbin, #tab-Toilet, #tab-Police, #tab-Pharmacy').forEach(btn => {
+                btn.className = `py-2 text-[9px] font-black rounded-xl transition-all ${btn.id === 'tab-'+cat ? 'active-tab' : 'text-slate-500'}`;
+            });
+
+            const levelUI = document.getElementById('level-control-ui');
+            const actionBtn = document.getElementById('main-action-btn');
+
+            if (cat === 'Police' || cat === 'Pharmacy') {
+                levelUI.style.display = 'none';
+                actionBtn.innerHTML = `<i data-lucide="phone" size="18"></i> CALL FACILITY`;
+                actionBtn.className = "w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all";
+            } else {
+                levelUI.style.display = 'block';
+                actionBtn.innerHTML = `<i data-lucide="zap" size="18"></i> PUSH LIVE UPDATE`;
+                actionBtn.className = "w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all";
+            }
+            
+            renderMapAndMenu(true);
+            lucide.createIcons();
+        }
+
+       function renderMapAndMenu(resetToFirst = false) {
+    if (!markerGroup) return;
+    markerGroup.clearLayers();
+    const selector = document.getElementById('assetSelector');
+    const currentIndex = resetToFirst ? 0 : selector.value;
+    selector.innerHTML = '';
+    
+    cityAssets[currentCategory].forEach((item, index) => {
+        let opt = document.createElement('option'); 
+        opt.value = index; 
+        opt.innerText = item.name; 
+        selector.appendChild(opt);
+
+        // --- BRAIN OF THE COLOR LOGIC ---
+        let color;
+        
+        if (currentCategory === 'Police') {
+            color = "#3b82f6"; // Police Blue
+        } 
+        else if (currentCategory === 'Pharmacy') {
+            color = "#10b981"; // Pharmacy Emerald (Always Green)
+        } 
+        else {
+            // LOGIC FOR DUSTBINS & TOILETS
+            let level = item.level || 0;
+            
+            if (level >= 85) {
+                color = "#ef4444"; // RED: Critical / Full
+            } else if (level >= 50) {
+                color = "#eab308"; // YELLOW: Warning / Half-full
+            } else {
+                color = "#22c55e"; // GREEN: Safe / Empty (Your requested fix)
+            }
+        }
+
+        L.circleMarker([item.lat, item.lng], { 
+            radius: 10, 
+            fillColor: color, 
+            color: "#fff", 
+            weight: 2, 
+            fillOpacity: 0.9 
+        }).addTo(markerGroup);
+    });
+
+    selector.value = currentIndex || 0;
+    focusOnSelected();
+}
+
+        function focusOnSelected() {
+            const index = document.getElementById('assetSelector').value;
+            const asset = cityAssets[currentCategory][index];
+            if (asset) map.flyTo([asset.lat, asset.lng], 14);
+        }
+
+        function handleMainAction() {
+            const index = document.getElementById('assetSelector').value;
+            const asset = cityAssets[currentCategory][index];
+            if (currentCategory === 'Police' || currentCategory === 'Pharmacy') {
+                showAuthorityAlert(`Dialing ${asset.name}: ${asset.phone}`);
+                window.location.href = `tel:${asset.phone}`;
+            } else {
+                updateStatus();
+            }
+        }
+
+        function updateStatus() {
+            if (currentCategory === 'Police' || currentCategory === 'Pharmacy') return;
+            const index = document.getElementById('assetSelector').value;
+            const newLevel = document.getElementById('levelRange').value;
+            const asset = cityAssets[currentCategory][index];
+            asset.level = parseInt(newLevel);
+            renderMapAndMenu(false);
+            if (asset.level >= 100) showAuthorityAlert(`${asset.name} is now critical.`);
+        }
+
+        // Logic for Home view and items
+        function renderItems() {
+            const container = document.getElementById('item-container');
+            container.innerHTML = trackedItems.map((item) => `
+                <div class="glass-card p-6 flex items-center justify-between group">
+                    <div class="flex items-center gap-5 flex-1">
+                        <div class="bg-blue-500/10 p-3 rounded-xl text-blue-400"><i data-lucide="${item.icon}" size="20"></i></div>
+                        <div class="flex-1">
+                            <p class="text-[10px] font-black text-slate-500 uppercase">${item.name}</p>
+                            <input class="w-full text-white font-medium text-sm pt-1" value="${item.loc}">
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function setTripType(type) {
+            document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-${type}`).classList.add('active');
+            const filtered = trackedItems.filter(item => item.types.includes(type));
+            const content = document.getElementById('modal-checklist-content');
+            content.innerHTML = filtered.map(item => `
+                <div class="checklist-item">
+                    <input type="checkbox" id="mod-${item.id}">
+                    <label for="mod-${item.id}" class="flex-1 cursor-pointer">
+                        <p class="text-white text-xs font-bold">${item.name}</p>
+                    </label>
+                    <i data-lucide="${item.icon}" class="text-slate-600" size="14"></i>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function transitionToLeaving() { document.getElementById('safety-modal').style.display = 'flex'; setTripType('work'); }
+        function confirmAndGo() { document.getElementById('safety-modal').style.display = 'none'; document.getElementById('home-view').style.display = 'none'; document.getElementById('leaving-view').style.display = 'flex'; initMap(); setTimeout(() => map.invalidateSize(), 200); }
+        function transitionToHome() { document.getElementById('leaving-view').style.display = 'none'; document.getElementById('home-view').style.display = 'flex'; }
+        function updateCheck(btn) { btn.innerText = "Verified"; btn.className = "px-5 py-2 bg-emerald-600 rounded-xl text-xs font-bold text-white transition-all"; setTimeout(() => { btn.innerText = "Verify"; btn.className = "px-5 py-2 bg-white/5 hover:bg-blue-600 rounded-xl text-xs font-bold transition-all"; }, 5000); }
+        function simulateWifiDisconnect() { const r = document.getElementById('wifi-reminder'); r.classList.add('show'); setTimeout(() => r.classList.remove('show'), 6000); }
+        function showAuthorityAlert(msg = "Authority notified") { const a = document.getElementById('notification-toast'); document.getElementById('alert-subtext').innerText = msg; a.classList.add('show'); setTimeout(() => a.classList.remove('show'), 5000); }
+        
+        // NEW: Global Voice Controller
+// --- PASTE THIS NEW LOGIC HERE ---
+
+let sosTimer; // Global variable to hold the countdown
+
+function setupVoiceRecognition() {
+    window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!window.SpeechRecognition) {
+        alert("Microphone not supported in this browser.");
+        return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-IN';
+
+    recognition.onstart = () => {
+        const status = document.getElementById('voice-status');
+        const iconBg = document.getElementById('voice-icon-bg');
+        
+        status.innerText = "LISTENING LIVE...";
+        status.className = "text-[9px] text-cyan-400 font-black animate-pulse";
+        iconBg.classList.add('voice-active-pulse', 'bg-cyan-500/40');
+
+        // --- THE 5-SECOND AUTO-TRIGGER LOGIC ---
+        console.log("Timer started: Alert in 5 seconds...");
+        sosTimer = setTimeout(() => {
+            if (voiceActive) {
+                triggerEmergency("SOS TRIGGER");
+            }
+        }, 5000); 
+    };
+
+    recognition.onresult = (event) => {
+        const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+        console.log("Heard:", transcript);
+        const keywords = ["help", "sahaayikkane", "ayo", "emergency", "police", "save me"];
+        
+        if (keywords.some(word => transcript.includes(word))) {
+            clearTimeout(sosTimer); // Cancel timer if voice is actually heard first
+            triggerEmergency("VOICE SOS: " + transcript.toUpperCase());
+        }
+    };
+
+    recognition.onend = () => {
+        if (voiceActive) {
+            recognition.start(); 
+        } else {
+            clearTimeout(sosTimer); // Stop timer if user manually turns it off
+        }
+    };
+}
+
+function toggleVoiceGuard() {
+    voiceActive = document.getElementById('voiceToggle').checked;
+    if (voiceActive) {
+        if (!recognition) setupVoiceRecognition();
+        try { recognition.start(); } catch(e) {}
+    } else {
+        clearTimeout(sosTimer); // Safety: Stop any pending alerts
+        if (recognition) recognition.stop();
+        document.getElementById('voice-status').innerText = "Listening Off";
+        document.getElementById('voice-status').className = "text-[9px] text-slate-500 uppercase";
+        document.getElementById('voice-icon-bg').classList.remove('voice-active-pulse', 'bg-cyan-500/40');
+    }
+}
+function toggleVoiceGuard() {
+    voiceActive = document.getElementById('voiceToggle').checked;
+    if (voiceActive) {
+        if (!recognition) setupVoiceRecognition();
+        try { recognition.start(); } catch(e) {}
+    } else {
+        if (recognition) recognition.stop();
+        document.getElementById('voice-status').innerText = "Listening Off";
+        document.getElementById('voice-status').className = "text-[9px] text-slate-500 uppercase";
+        document.getElementById('voice-icon-bg').classList.remove('voice-active-pulse', 'bg-cyan-500/40');
+    }
+}
+
+function renderMapAndMenu(resetToFirst = false) {
+    if (!markerGroup) return;
+    markerGroup.clearLayers();
+    const selector = document.getElementById('assetSelector');
+    const currentIndex = resetToFirst ? 0 : selector.value;
+    selector.innerHTML = '';
+    
+    cityAssets[currentCategory].forEach((item, index) => {
+        let opt = document.createElement('option'); 
+        opt.value = index; 
+        opt.innerText = item.name; 
+        selector.appendChild(opt);
+
+        let color;
+        if (currentCategory === 'Police') {
+            color = "#3b82f6"; // Blue
+        } else if (currentCategory === 'Pharmacy') {
+            color = "#10b981"; // Emerald
+        } else {
+            let level = item.level || 0;
+            if (level >= 85) color = "#ef4444";      // RED
+            else if (level >= 50) color = "#eab308"; // YELLOW
+            else color = "#22c55e";                  // GREEN (FIXED)
+        }
+
+        L.circleMarker([item.lat, item.lng], { 
+            radius: 10, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.9 
+        }).addTo(markerGroup);
+    });
+    selector.value = currentIndex || 0;
+    focusOnSelected();
+}
+
+function triggerEmergency(reason) { 
+    if (navigator.vibrate) navigator.vibrate([500, 200, 500]); 
+    showAuthorityAlert(reason);
+    // Visual Alert: Flash the screen red
+    document.body.style.boxShadow = "inset 0 0 100px #ef4444";
+    setTimeout(() => document.body.style.boxShadow = "none", 2000);
+}
+function toggleVoiceGuard() {
+    voiceActive = document.getElementById('voiceToggle').checked;
+    const status = document.getElementById('voice-status');
+    const iconBg = document.getElementById('voice-icon-bg');
+
+    if (voiceActive) {
+        if (!recognition) setupVoiceRecognition();
+        
+        // Browsers require a user gesture to start audio
+        try {
+            recognition.start();
+            iconBg.classList.add('voice-active-pulse', 'bg-cyan-500/40');
+        } catch (e) {
+            console.log("Recognition already running or blocked.");
+        }
+    } else {
+        if (recognition) {
+            recognition.stop();
+        }
+        status.innerText = "Listening Off";
+        status.className = "text-[9px] text-slate-500 uppercase";
+        iconBg.classList.remove('voice-active-pulse', 'bg-cyan-500/40');
+    }
+}
+
+        function toggleShadowEscort() {
+            shadowActive = document.getElementById('shadowToggle').checked;
+            const status = document.getElementById('shadow-status');
+            const testBtn = document.getElementById('test-fall-btn');
+            if (shadowActive) {
+                status.innerText = "Monitoring Motion";
+                testBtn.classList.remove('hidden');
+            } else {
+                status.innerText = "Standby";
+                testBtn.classList.add('hidden');
+            }
+        }
+
+        function simulateFall() { showAuthorityAlert("IMPACT DETECTED: SOS Triggered"); }
+
+        // Start
+        renderItems();
+        lucide.createIcons();
+    </script>
+</body>
+</html>
