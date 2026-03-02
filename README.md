@@ -2,15 +2,14 @@
   <img src="./img.png" alt="Project Banner" width="100%">
 </p>
 
-# [Project Name] 🎯
+# All Is Well 🎯
 
 ## Basic Details
 
-### Team Name: [Name]
+### Team Name: Priya Mary Abraham
 
 ### Team Members
-- Member 1: [Name] - [College]
-- Member 2: [Name] - [College]
+- Member 1: Priya Mary Abraham - Mar Baselios Christian College of Engineering and Technology
 
 ### Hosted Project Link
 [mention your project hosted link here]
