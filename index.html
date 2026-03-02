@@ -506,7 +506,33 @@
         function transitionToLeaving() { document.getElementById('safety-modal').style.display = 'flex'; setTripType('work'); }
         function confirmAndGo() { document.getElementById('safety-modal').style.display = 'none'; document.getElementById('home-view').style.display = 'none'; document.getElementById('leaving-view').style.display = 'flex'; initMap(); setTimeout(() => map.invalidateSize(), 200); }
         function transitionToHome() { document.getElementById('leaving-view').style.display = 'none'; document.getElementById('home-view').style.display = 'flex'; }
-        function updateCheck(btn) { btn.innerText = "Verified"; btn.className = "px-5 py-2 bg-emerald-600 rounded-xl text-xs font-bold text-white transition-all"; setTimeout(() => { btn.innerText = "Verify"; btn.className = "px-5 py-2 bg-white/5 hover:bg-blue-600 rounded-xl text-xs font-bold transition-all"; }, 5000); }
+       function updateCheck(btn) {
+    // 1. Update the button appearance
+    btn.innerText = "Verified";
+    btn.className = "px-5 py-2 bg-emerald-600 rounded-xl text-xs font-bold text-white transition-all";
+
+    // 2. Find and update the time text in the parent card
+    const card = btn.closest('.glass-card');
+    const timeDisplay = card.querySelector('.check-time');
+    
+    if (timeDisplay) {
+        timeDisplay.innerText = "Verified Just Now";
+        timeDisplay.classList.remove('text-slate-500');
+        timeDisplay.classList.add('text-emerald-400', 'font-bold');
+    }
+
+    // 3. Reset after 5 seconds
+    setTimeout(() => {
+        btn.innerText = "Verify";
+        btn.className = "px-5 py-2 bg-white/5 hover:bg-blue-600 rounded-xl text-xs font-bold transition-all";
+        
+        if (timeDisplay) {
+            timeDisplay.innerText = "Verified 1m ago"; // Or reset to a default state
+            timeDisplay.classList.add('text-slate-500');
+            timeDisplay.classList.remove('text-emerald-400', 'font-bold');
+        }
+    }, 5000);
+}
         function simulateWifiDisconnect() { const r = document.getElementById('wifi-reminder'); r.classList.add('show'); setTimeout(() => r.classList.remove('show'), 6000); }
         function showAuthorityAlert(msg = "Authority notified") { const a = document.getElementById('notification-toast'); document.getElementById('alert-subtext').innerText = msg; a.classList.add('show'); setTimeout(() => a.classList.remove('show'), 5000); }
         
