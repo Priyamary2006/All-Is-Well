@@ -18,7 +18,7 @@
 An AI-driven Smart City & Safety Hub that integrates real-time IoT tracking for household essentials with a live mapping system for urban utilities. It features hands-free SOS voice triggers and automated safety checklists to bridge the gap between personal security and public infrastructure management.
 
 ### The Problem statement
-[What problem are you solving?]
+Existing urban solutions often operate in silos, forcing users to switch between multiple apps for home security, personal safety, and public utility information. This fragmentation leads to delayed emergency responses and inefficient management of daily household or city-level tasks.
 
 ### The Solution
 [How are you solving it?]
