@@ -94,14 +94,15 @@ The Dashboard for Police Station
 
 **System Architecture:**
 
-![Architecture Diagram]
+[Architecture Diagram]
 
 <img width="1408" height="768" alt="Gemini_Generated_Image_9ccog49ccog49cco" src="https://github.com/user-attachments/assets/f6644d8b-5821-4f8f-ae8d-2b766357aa29" />
 *This diagram shows the relationship between the Frontend UI, the browser APIs (Speech/Location), and the external data layers.*
 
+
 **Application Workflow:**
 
-![Workflow]
+[Workflow]
 <img width="1408" height="768" alt="Gemini_Generated_Image_lx7w55lx7w55lx7w" src="https://github.com/user-attachments/assets/42a81a0f-63c5-462f-a78f-18e31fe93a55" />
 *The All Is Well workflow follows a state-driven logic that begins in the Home View, where a contextual filtering system adjusts safety checklists based on the user's selected trip type. Once verified, the application transitions to the Leaving View, a dual-layer environment that simultaneously renders a real-time Leaflet.js map for urban utility tracking while activating a background Sensor Layer. This layer utilizes the Web Speech API to maintain a continuous monitoring loop, specifically looking for distress keywords or sudden motion impacts. If a threat is detected, the system executes an SOS Intercept, overriding the standard UI with a high-priority emergency countdown and visual alerts, effectively bridging the gap between proactive home preparation and reactive urban safety.*
 
