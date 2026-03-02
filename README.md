@@ -97,7 +97,7 @@ The Dashboard for Police Station
 [Architecture Diagram]
 
 <img width="1408" height="768" alt="Gemini_Generated_Image_9ccog49ccog49cco" src="https://github.com/user-attachments/assets/f6644d8b-5821-4f8f-ae8d-2b766357aa29" />
-*This diagram shows the relationship between the Frontend UI, the browser APIs (Speech/Location), and the external data layers.*
+This diagram shows the relationship between the Frontend UI, the browser APIs (Speech/Location), and the external data layers.
 
 
 **Application Workflow:**
