@@ -12,7 +12,7 @@
 - Member 1: Priya Mary Abraham - Mar Baselios Christian College of Engineering and Technology
 
 ### Hosted Project Link
-[mention your project hosted link here]
+https://all-is-well-rho.vercel.app/
 
 ### Project Description
 A Smart City & Safety Hub that integrates real-time IoT tracking for household essentials with a live mapping system for urban utilities. It features hands-free SOS voice triggers and automated safety checklists to bridge the gap between personal security and public infrastructure management.
